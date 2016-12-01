@@ -25,8 +25,10 @@ import java.util.stream.Stream;
  */
 public class Jtop extends Application
 {
+  static boolean headless = false;
   static String name = null;
   static Process process = null;
+
   Thread thread = null;
 
   @Override
@@ -74,7 +76,7 @@ public class Jtop extends Application
     final Scene scene = new Scene(root, 1024, 768);
     primaryStage.setScene(scene);
 
-    primaryStage.show();
+    if (!headless) primaryStage.show();
 
     thread = new Thread(() ->
     {
@@ -105,29 +107,38 @@ public class Jtop extends Application
 
           for (int i = 0; i < prevCpuStats.length; ++i) prevCpuStats[i] = curCpuStats[i];
 
-          Platform.runLater(() -> cpu.getData().add(new XYChart.Data(index.incrementAndGet(), cpuLoadAvg)));
-          Platform.runLater(() -> memory.getData().add(new XYChart.Data(index.incrementAndGet(), memoryUsage)));
+          if (!headless)
+          {
+            Platform.runLater(() ->
+            {
+              cpu.getData().add(new XYChart.Data(index.incrementAndGet(), cpuLoadAvg));
+              memory.getData().add(new XYChart.Data(index.incrementAndGet(), memoryUsage));
+            });
+          }
 
           if (pieChart.isVisible())
           {
             getCores(curCoreStats);
 
-            Platform.runLater(() ->
+            if (!headless)
             {
-              pieChartData.clear();
-
-              for (int core = 0; core < curCoreStats.length; ++core)
+              Platform.runLater(() ->
               {
-                final long prevCoreLoad = prevCoreStats[core][0] + prevCoreStats[core][1] + prevCoreStats[core][2];
-                final long curCoreLoad = curCoreStats[core][0] + curCoreStats[core][1] + curCoreStats[core][2];
-                final double coreLoadAvg = ((double) (curCoreLoad - prevCoreLoad)) / ((double) ((curCoreLoad + curCoreStats[core][3]) - (prevCoreLoad + prevCoreStats[core][3])));
+                pieChartData.clear();
 
-                for (int i = 0; i < prevCoreStats[core].length; ++i)
-                  prevCoreStats[core][i] = curCoreStats[core][i];
+                for (int core = 0; core < curCoreStats.length; ++core)
+                {
+                  final long prevCoreLoad = prevCoreStats[core][0] + prevCoreStats[core][1] + prevCoreStats[core][2];
+                  final long curCoreLoad = curCoreStats[core][0] + curCoreStats[core][1] + curCoreStats[core][2];
+                  final double coreLoadAvg = ((double) (curCoreLoad - prevCoreLoad)) / ((double) ((curCoreLoad + curCoreStats[core][3]) - (prevCoreLoad + prevCoreStats[core][3])));
 
-                pieChartData.add(new PieChart.Data("Core " + core, coreLoadAvg));
-              }
-            });
+                  for (int i = 0; i < prevCoreStats[core].length; ++i)
+                    prevCoreStats[core][i] = curCoreStats[core][i];
+
+                  pieChartData.add(new PieChart.Data("Core " + core, coreLoadAvg));
+                }
+              });
+            }
           }
         }
 
@@ -178,9 +189,10 @@ public class Jtop extends Application
   {
     try
     {
-      name = Stream.of(args).reduce("", (s,t) -> s + " " + t);
-      process = Runtime.getRuntime().exec(args);
-      launch(args);
+      if ("--headless".equalsIgnoreCase(args[0])) headless = true;
+      name = Stream.of(args).filter(arg -> !arg.equalsIgnoreCase("--headless")).reduce("", (s,t) -> s + " " + t);
+      process = Runtime.getRuntime().exec(name);
+      launch(name);
     }
     catch (Throwable t)
     {
